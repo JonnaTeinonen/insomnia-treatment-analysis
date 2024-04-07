@@ -1,0 +1,255 @@
+---
+title: "Data Simulation"
+output: html_document
+date: "2024-04-04"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+# 1. Data Simulation
+
+
+There is no prior information about the distribution for the ISI scores. However, as the sample size is relatively large but the ISI scores are bound between 0-28, truncated normal distribution will be used for the simulation. The mean and SD of the dsitrubtions for the treatment and control are based on a results of similar study by van der Zweerde et al. (2018).
+
+```{r} 
+set.seed(01012024)
+n <- 104  # Sample size per group
+
+id <- 1:n
+
+# Simulating gender: 0=male, 1=female
+gender_sim <- rbinom(n, size=1, prob=0.7)
+
+# Simulating age
+age_sim_control <- round(rtruncnorm(n=n/2, a=18, b=50, mean=24.8, sd=7.7))
+age_sim_treatment <- round(rtruncnorm(n=n/2, a=18, b=50, mean=24.6, sd=7.6))
+
+
+```
+
+
+## 1.1 Simulating the baseline measurements
+
+```{r}
+
+# Function for rpearson
+get_rpearson <- function(n, mean, var, skewness, kurtosis){
+  # Empirical moments
+  moments <- c(mean=mean, variance=var, skewness=skewness, kurtosis=kurtosis)
+  
+  # Simulated data
+  simulated_data = rpearson(n=n/2, moments=moments)
+  
+  return(simulated_data)
+}
+
+
+# ISI total score
+ISI_sim_treatment_pre <- round(rtruncnorm(n=n/2, a=8, b=28, mean=15.3, sd=4.0))
+ISI_sim_control_pre <- round(rtruncnorm(n=n/2, a=8, b=28, mean=15.4, sd=3.9))
+
+# PHQ-9 total score
+PHQ_sim_treatment_pre <- get_rpearson(n=n, 
+                                      mean = 12.9,
+                                      var = (5.8)^2, 
+                                      skewness = 2.025, 
+                                      kurtosis = 4.775+3)      
+
+
+PHQ_sim_control_pre <- get_rpearson(n=n,
+                                    mean = 12.7, 
+                                    var = (5.9)^2,
+                                    skewness=2.025,
+                                    kurtosis=4.775+3) 
+
+# WSAS total score
+WSAS_sim_treatment_pre <- get_rpearson(n=n,
+                                      mean = 17.6,
+                                      var = (7.6)^2, 
+                                      skewness = 1.2, 
+                                      kurtosis = 1.9+3)   
+
+WSAS_sim_control_pre <- get_rpearson(n=n,
+                                     mean = 17.7,
+                                      var = (7.6)^2, 
+                                      skewness = 1.2, 
+                                      kurtosis = 1.9+3)   
+
+
+# GAD-7 total score
+GAD_sim_treatment_pre <- get_rpearson(n=n,
+                                      mean = 9.4,
+                                      var = (5.6)^2, 
+                                      skewness = 0.399, 
+                                      kurtosis = -0.869+3)     
+
+
+GAD_sim_control_pre <- get_rpearson(n=n,
+                                    mean = 9.0, 
+                                    var = (5.6)^2, 
+                                    skewness = 0.399, 
+                                    kurtosis = -0.869+3)      
+
+
+
+
+```
+
+## 1.2 Simulating the post-treatment measurements
+
+```{r}
+# ISI total score
+ISI_sim_treatment_change <- rtruncnorm(n=n/2, mean=-6.07, sd=5.18, a=-10, b=10)
+ISI_sim_treatment_post <- ISI_sim_treatment_pre + ISI_sim_treatment_change
+
+ISI_sim_control_change <- rtruncnorm(n=n/2, mean=-3.23, sd=5.27, a=-5, b=5)
+ISI_sim_control_post <- ISI_sim_control_pre + ISI_sim_control_change
+
+# PHQ-9 total score
+PHQ_sim_treatment_change <- rtruncnorm(n=n/2, mean=-4.43, sd=6.16, a=-10, b=10)
+PHQ_sim_treatment_post <- PHQ_sim_treatment_pre + PHQ_sim_treatment_change 
+
+PHQ_sim_control_change <- rtruncnorm(n=n/2, mean=-1.43, sd=6.72, a=-4, b=4)
+PHQ_sim_control_post <- PHQ_sim_control_pre + PHQ_sim_control_change
+
+# WSAS total score
+WSAS_sim_treatment_change <- rtruncnorm(n=n/2, mean=-6.27, sd=8.37, a=-10, b=10)
+WSAS_sim_treatment_post <- WSAS_sim_treatment_pre + WSAS_sim_treatment_change
+
+WSAS_sim_control_change <- rtruncnorm(n=n/2, mean=-1.68, sd=8.89, a=-5, b=5)
+WSAS_sim_control_post <- WSAS_sim_control_pre + WSAS_sim_control_change
+
+# GAD-7 total score
+GAD_sim_treatment_change <- rtruncnorm(n=n/2, mean=-2.87, sd=5.4, a=-5, b=5)
+GAD_sim_treatment_post <- GAD_sim_treatment_pre + GAD_sim_treatment_change
+
+GAD_sim_control_change <- rtruncnorm(n=n/2, mean=-0.65, sd=6.06, a=-5, b=5)
+GAD_sim_control_post <- GAD_sim_control_pre + GAD_sim_control_change
+
+```
+
+NOTE! The mean and SD are based on the changes between the baseline and 
+post-measurements. The limits for the truncated distributions are arbitrary to 
+ensure results that make sense. 
+
+```{r}
+n
+length(ISI_sim_treatment_post)
+length(ISI_sim_control_post)
+length(GAD_sim_treatment_post)
+length(GAD_sim_control_post)
+```
+
+
+
+## 1.3 Cleaning and combining simulated data
+
+
+```{r}
+
+# Treatment effect: 0=control, 1=treatment group
+time_effect <- c(rep(0, n), rep(1, n))
+
+# Time effect: 0=baseline, 1=post-measurement
+treatment_effect <- c(rep(0, (n/2)), rep(1, (n/2)), rep(0, (n/2)), rep(1, (n/2)))
+
+# Combining all data into a same dataset
+complete_data <- data.frame(c(id, id), 
+                            c(age_sim_control, age_sim_treatment, age_sim_control, age_sim_treatment),
+                            c(gender_sim, gender_sim), 
+                            treatment_effect, 
+                            time_effect,
+                            c(ISI_sim_control_pre, ISI_sim_treatment_pre, ISI_sim_control_post, ISI_sim_treatment_post),
+                            c(PHQ_sim_control_pre, PHQ_sim_treatment_pre, PHQ_sim_control_post, PHQ_sim_treatment_post),
+                            c(WSAS_sim_control_pre, WSAS_sim_treatment_pre, WSAS_sim_control_post, WSAS_sim_treatment_post),
+                            c(GAD_sim_control_pre, GAD_sim_treatment_pre, GAD_sim_control_post, GAD_sim_treatment_post))
+
+names(complete_data) <- c("ID", "Age", "Gender", "Treatment", "Time", "ISI", "PHQ-9", "WSAS", "GAD-7")
+dim(complete_data)
+
+```
+
+
+```{r}
+set_ranges <- function(values, a, b){
+  left_clipped <- ifelse(values < a, a, values)
+  right_clipped <- ifelse(left_clipped > b, b, left_clipped)
+  
+  return(right_clipped)
+  
+}
+
+y_range_list <- list("ISI"=c(0, 28), 
+                     "PHQ-9"=c(0, 27), 
+                     "WSAS"=c(0, 40), 
+                     "GAD-7"=c(0, 21))
+
+complete_data$ISI <- round(set_ranges(values=complete_data$ISI, 
+                                      a=y_range_list$ISI[1], 
+                                      b=y_range_list$ISI[2]))
+
+complete_data$`PHQ-9` <- round(set_ranges(values=complete_data$`PHQ-9`, 
+                                          a=y_range_list$`PHQ-9`[1], 
+                                          b=y_range_list$`PHQ-9`[2]))
+
+complete_data$WSAS <- round(set_ranges(values=complete_data$WSAS,
+                                       a=y_range_list$WSAS[1],
+                                       b=y_range_list$WSAS[2]))
+
+complete_data$`GAD-7` <- round(set_ranges(values=complete_data$`GAD-7`,
+                                          a=y_range_list$`GAD-7`[1],
+                                          b=y_range_list$`GAD-7`[2]))
+
+complete_data
+
+```
+
+## 1.4 Adding Missing Values
+
+First, 15 participants will be randomly removed from the post-measurements
+to add participatino dropout in the data that would be expected with
+real data as well.
+
+```{r}
+complete_data_pre <- complete_data[complete_data$Time == 0, ]
+complete_data_post <- complete_data[complete_data$Time == 1, ]
+
+
+# Generates randomly 15 rows indexes
+dropout_i <- sample(n, 15, replace = FALSE) 
+
+# Rows that will be removed from post-measurements
+rows_to_be_removed <- complete_data_post[dropout_i, ]
+
+# The complete data with dropouts
+data_post_with_dropouts <- complete_data_post[-dropout_i, ]
+
+rows_to_be_removed
+data_post_with_dropouts
+
+```
+
+
+```{r}
+data_with_dropouts <- rbind(complete_data_pre, data_post_with_dropouts)
+data_with_dropouts
+```
+
+
+```{r}
+# Add missingness to data (MAR)
+data_missing_values <- ampute(data_with_dropouts[, 7:9], prop = 0.3, mech = "MAR")
+
+# Final data set including all the data with missing values
+data <- data_with_dropouts
+data[, 7:9] <- data_missing_values$amp
+```
+
+```{r}
+data
+```
+

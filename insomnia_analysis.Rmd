@@ -1,0 +1,673 @@
+---
+title: "Insomnia Simulation Study"
+output:
+  html_document: default
+  word_document: default
+  pdf_document: default
+date: "2024-03-18"
+
+---
+
+```{r}
+# Packages and their versions that are needed to replicate the simulation study
+# results.
+
+#install.packages("knitr")
+#install.packages("truncnorm")
+#install.packages("PearsonDS")
+#install.packages("mice")
+#install.packages("moments")
+#install.packages("ggplot2")
+#install.packages("dplyr")
+#install.packages("ggpubr")
+#install.packages("finalfit")
+#install.packages("ggmice")
+#install.packages("naniar")
+#install.packages("lme4")
+#install.packages("lmerTest")
+#install.packages("car")
+#install.packages("broom.mixed")
+
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, message=FALSE}
+# Removes the message related to the package version and information 
+
+library(truncnorm)    # Simulates data from truncated normal distributions
+library(PearsonDS)    # Simulates data from certain distributions
+library(mice)         # Imputes data by using MICE
+library(moments)      # Computes skewness and kurtosis
+library(ggplot2)      # Advanced plotting
+library(dplyr)        # Data handling and aggregations
+library(ggpubr)       # Combines ggplots into one figure
+library(finalfit)     # Analyses and visualises missingness
+library(ggmice)       # Visualises missingness patterns
+library(naniar)       # Performs Little's test for missingness (MAR vs. MCAR)
+library(lme4)         # Fits linear mixed models
+library(lmerTest)     # Computes p-values for the linear mixed models
+library(car)          # Creates a qqplot to check the model assumptions for LMM
+library(broom.mixed)  # Compute the pooled parameter estimates for LMM
+```
+
+```{r}
+# Plotting colours
+fig_colors <- c("#99c7e0", "#99d8c7")
+```
+
+# 1. Project Description
+
+This project recreates and illustrates data analysis methods used in a pilot
+study. Data was analysed to determine the influence of online cognitive
+behavioural therapy for insomnia (CBT-I) on students suffering from insomnia.
+The goal was to further analyse what types of problems the research setting
+could encounter with the data. Due to data and client confidentiality, details
+on the project description have been edited and the data for the analysis will
+be fully simulated based on information from published articles to create a
+representative showcase of the actual data analysis process that took place with
+the real data.
+
+In the project, the study recruited 98 students who suffered from insomnia and
+randomly divided the students into a control group (no treatment) or the (CBT-I)
+treatment group. The following were measured at the baseline:
+
+-   Insomnia Severity Index (ISI) score to measure insomnia: the score ranges
+    from 0 to 28; a minimum of 8 is needed to have an indication of insomnia.
+
+-   Patient Health Questionnaire (PHQ-9) score to measure depression: the score
+    ranges from 0 to 27; a minimum of 5 is needed to have an indication of mild
+    symptoms of depression.
+
+-   General Anxiety Disorder Assessment (GAD-7) to measure anxiety: the score
+    ranges from 0 to 21 and a minimum score of 5 is needed to have an indication
+    of mild symptoms.
+
+The online CBT-I lasted for 5 weeks and after 9 weeks, ISI, PHQ-9 and GAD-7 was
+again measured from all the participants in the treatment and in the control
+group.
+
+The following variables are considered the target variable:
+
+-   ISI score
+
+-   PHQ-9 score
+
+-   GAD-7 score
+
+The following variables are considered the independent variables:
+
+-   Treatment with two levels: online CBT-I treatment group and control group
+
+-   Time with two levels: pre-measurement (baseline) and post-measurements
+
+The main research question of the project was: *What is the influence of the
+treatment on students' levels of insomnia, depression and anxiety?* The further
+goal was to later conduct a similar study, in which the participants would be
+followed for a longer period of time. Therefore, the goal was also to determine,
+based on the data, what types of challenges the research setting could expect to
+encounter (e.g. participant dropouts) and how they could be taken into
+consideration when planning the larger study.
+
+# 2. Data Simulation
+
+For the simulation, the mean and standard deviation for the participants' age,
+ISI, PHQ-9 and GAD-7 score for the treatment and control group are based on the
+results of a similar but much larger study by Freeman et al. (2017). There is no
+prior information about the distribution for ISI in the population. However, as
+the sample size is relatively large and the score should be bound between 8-28,
+a truncated normal distribution was used to simulate baseline scores for all
+participants. The same was also used to simulate the age for the participants.
+
+Prior research indicates that the PHQ-9 and GAD-7 could be positively skewed in
+the population (Akram et al., 2023, van der Zweerde et al., 2018). The data was
+simulated from a Pearson distribution with the *PearsonDS()* library using
+arbitrary skewness and kurtosis values to imitate the distributions.
+
+The change in each score for post-results was simulated from a truncated normal
+distribution with the mean change and post-results SD that was observed by
+Freeman et al. (2017) for each group.
+
+```{r}
+set.seed(01012024)
+
+# Source utility functions for the simulation
+source("data_simulation_functions.R")
+
+n <- 98  # Sample size for each measured time point (pre/post)
+
+# Simulate a complete dataset with simulated missingness (MAR)
+complete_data <- get_complete_sim_data(n)
+data          <- get_data_with_missingness(complete_data)
+
+```
+
+```{r}
+head(data)
+```
+
+# 3. Data Exploration
+
+The typing of each variable is checked and correct levels/categories are added
+for the discrete variables.
+
+```{r}
+# Check the class of each variable
+sapply(data, class)
+
+# Convert categorical variables to factors and add corresponding levels
+data$Gender             <- as.factor(data$Gender)
+levels(data$Gender)     <- c("Male", "Female")
+
+data$Treatment          <- factor(data$Treatment)
+levels(data$Treatment)  <- c("Control", "Treatment")
+
+data$Time               <- as.factor(data$Time)
+levels(data$Time)       <- c("Pre", "Post")
+
+sapply(data, class)
+
+```
+
+The data is further divided into four subsets for later analysis and plots:
+baseline results and post-measurements based on the treatment group.
+
+```{r}
+# Subset the dataset by time and treatment
+data_pre            <- subset(data, Time == "Pre")
+data_pre_control    <- subset(data_pre, Treatment == "Control")
+data_pre_treatment  <- subset(data_pre, Treatment == "Treatment")
+
+data_post           <- subset(data, Time == "Post")
+data_post_control   <- subset(data_post, Treatment == "Control")
+data_post_treatment <- subset(data_post, Treatment == "Treatment")
+
+```
+
+## 3.1 Univariate Analysis
+
+```{r}
+# Source the functions for the univariate analyses
+source("univariate_analysis_functions.R")
+```
+
+### 3.1.1 Univariate Descriptive Statistics
+
+In univariate analysis each variable is examined individually. First, the
+descriptive statistics for the whole dataset were computed.
+
+```{r}
+get_descriptive_stats(data)
+```
+
+As 98 participants were recruited and measured twice, there should be a total of
+196 observations. However, the number of observations is 181, indicating that 15
+participants dropped out. In addition, *PHQ-9* is missing 13% (n=24) and *GAD-7*
+14% (n=26) observations. The mean age of participants is 25.75 and we can see
+that there are more females than males in the whole sample.
+
+The descriptive statistics for the baseline measurements are the following:
+
+```{r}
+get_descriptive_stats(data_pre)
+```
+
+There are overall 98 participants in the baseline measurements with mean age of
+25.93. *PHQ-9* is missing 14% of the observations (n=14) and *GAD-7* is missing
+19% (n=19).
+
+The descriptive statistics for the post-measurements are:
+
+```{r}
+get_descriptive_stats(data_post)
+```
+
+We can see that 15 people dropped out as the number of participants dropped to
+83. Overall, *PHQ-9* and *GAD-7* seem to be missing values during
+pre-measurements but there seems to be participants who dropped out, as the
+number of observations dropped from 98 to 85.
+
+Frequency tables are used to observe the proportion of participants across the
+categorical variables.
+
+```{r}
+get_category_counts(data[, 3:5])
+```
+
+NOTE! As we have two measurements per participant, every count is doubled for
+each participant (assuming they completed both measurements).
+
+The frequency table grouped by all the categorical variables is the following:
+
+```{r, message=FALSE, warning=FALSE}
+# The warning about the change in the data structure (grouped variables as 
+# attributes) is suppressed
+
+output_table <- data                %>% 
+  group_by(Gender, Time, Treatment) %>% 
+  summarise(Count=n())
+    
+output_table
+    
+```
+
+### 3.1.2 Distribution of the Numerical Variables
+
+The distribution of the numerical variables will be examined by histograms and
+boxplots.
+
+#### 3.1.2.1 Histograms
+
+```{r message=FALSE, warning=FALSE}
+# Warnings about the missing data are suppressed
+
+# The column indexes of the numerical variables
+numerical_variable_columns_index <- c(2, 6, 7, 8)
+
+# Loops each numerical column
+for (i in numerical_variable_columns_index){
+  x           <- data[, i]      # Variable
+  x_var_name  <- names(data)[i] # Variable name
+  
+  # Histogram of the variable
+  x_fig <- get_hist_grouped_ggplot(data        = data,
+                                   x           = x,
+                                   x_name      = x_var_name,
+                                   group_var   = data$Treatment,
+                                   main_title  = paste0("Histogram of ", x_var_name),
+                                   x_title     = paste0(x_var_name))
+  print(x_fig)
+
+}
+```
+
+#### 3.1.2.2 Box plots
+
+Next, the distribution of the numerical variables and the presence of outliers
+is evaluated by analysing box plots.
+
+```{r message=FALSE, warning=FALSE}
+# Warnings about the missing data are suppressed
+
+for (i in numerical_variable_columns_index){
+  x          <- data[, i]      # Variable
+  x_var_name <- names(data)[i] # Name of the variable
+
+  # Box plot of the variable
+  x_fig <- get_boxplot_grouped_ggplot(data       = data, 
+                                      x          = x,
+                                      group_var  = data$Treatment,
+                                      x_title    = x_var_name,
+                                      main_title = paste0("Boxplot of ", x_var_name))
+  print(x_fig)
+
+}
+```
+
+It can be seen that the variables *Age* and *PHQ-9* have a right-skewed
+distribution. Some of the variables, especially *PHQ-9* seem to have outliers,
+but as the values are within the allowed ranges, they can be left in the data as
+they are.
+
+#### 3.1.2.3 Test for Normality
+
+As the figures have demonstrated that some of the variables show non-normal
+distributions, the normality of each variable is further analysed by normality
+tests. As each variable has duplicates of the same value, the normality is
+assessed by using the D’Agostino test for skewness and the Anscombe-Glynn test
+of kurtosis. The test is performed separately for the two treatment groups. The
+tests compare the skewness and kurtosis of the observed data to the skewness and
+kurtosis of a normal distribution.
+
+The results for the two groups during the pre-measurements are the following:
+
+```{r}
+# Results for the control group
+get_normality_test_results(data_pre_control, numerical_variable_columns_index) 
+```
+
+```{r}
+# Results for the treatment group
+get_normality_test_results(data_pre_treatment, numerical_variable_columns_index)
+
+```
+
+Next, the skewness and kurtosis test is performed separately for the
+post-measurement results of the two groups.
+
+```{r}
+# Results for the control group
+get_normality_test_results(data_post_control, numerical_variable_columns_index) 
+```
+
+```{r}
+# Results for the control group
+get_normality_test_results(data_post_treatment, numerical_variable_columns_index) 
+```
+
+For the pre-measurement the results indicate that *Age*, *ISI* and *GAD-7*
+follow relatively normal distributions whereas *PHQ-9* has a right-skewed
+distribution. For the post-measurements, *ISI* and *GAD-7* seem to follow a
+normal distribution, whereas *Age* and *PHQ-9* have a right-skewed distribution.
+
+#### 3.2 Frequency of Categorical Variables: Bar charts
+
+```{r}
+source("univariate_analysis_functions.R")
+# Bar chart showing the number of females and males
+barchart_gender_fig <- get_barchart_grouped_ggplot(data        = data,
+                                                   x           = data$Gender,
+                                                   x_labels    = c("Male", "Female"),
+                                                   group_var   = data$Treatment,
+                                                   main_title  = paste0("Barchart of the Number of Respondents by Gender"),
+                                                   x_title     = "Gender")
+print(barchart_gender_fig)
+
+# Bar chart showing the number of participants in each treatment group
+barchart_treatment_fig <- get_barchart_grouped_ggplot(data           = data,
+                                                      x              = data$Time,
+                                                      x_labels       = c("Pre", "Post"),
+                                                      group_var      = data$Treatment,
+                                                      legend_title   = "Treatment",
+                                                      legend_labels  = c("Control", "Treatment"),
+                                                      main_title     = paste0("Barchart of the Number of Respondents by Time"),
+                                                      x_title        = "Time")
+print(barchart_treatment_fig)
+
+```
+
+## 3.2 Bivariate Analysis
+
+The relationship between multiple variables is also examined by plots and
+correlation analysis.
+
+```{r}
+# Source the functions for the multivariate analyses
+source("multivariate_analysis_functions.R")
+```
+
+### 3.2.1 Continuous Variables
+
+The relationship between each numerical target variable is examined by analysing
+the scatter plots and performing correlations tests.
+
+#### 3.2.1.1 Scatter plots
+
+First, the scatter plots between *ISI* and other numerical variables:
+
+```{r message=FALSE, warning=FALSE}
+# Warnings about the missing data are suppressed
+
+# The column indexes for all numerical variables except ISI
+numerical_variable_columns_index <- c(2, 7, 8)
+
+for (i in numerical_variable_columns_index){
+  y           <- data[, i]
+  y_var_name  <- names(data)[i]
+  
+
+  fig <- get_scatterplot(data        = data,
+                         x           = data$ISI,
+                         y           = y,
+                         x_title     = "ISI",
+                         y_title     = y_var_name,
+                         main_title  = paste0("Association between ISI and ", y_var_name))
+  print(fig)
+  
+}
+```
+
+Next, the scatter plots between *PHQ-9* and other numerical variables:
+
+```{r message=FALSE, warning=FALSE}
+# Warnings about the missing data are suppressed
+
+# The column indexes for all numerical variables except PHQ-9
+numerical_variable_columns_index <- c(2, 6, 8)
+
+for (i in numerical_variable_columns_index){
+  y           <- data[, i]
+  y_var_name  <- names(data)[i]
+  
+
+  fig <- get_scatterplot(data       = data,
+                         x          = data$`PHQ-9`,
+                         y          = y,
+                         x_title    = "PHQ-9",
+                         y_title    = y_var_name,
+                         main_title = paste0("Association between PHQ-9 and ", y_var_name))
+  print(fig)
+
+}
+```
+
+Finally, the scatter plots between *GAD-7* and other numerical variables:
+
+```{r message=FALSE, warning=FALSE}
+# Warnings about the missing data are suppressed
+
+# The column indexes for all numerical variables except GAD-7
+numerical_variable_columns_index <- c(2, 6, 7)
+
+for (i in numerical_variable_columns_index){
+  y           <- data[, i]
+  y_var_name  <- names(data)[i]
+  
+
+  fig <- get_scatterplot(data       = data,
+                        x           = data$`GAD-7`,
+                        y           = y,
+                        x_title     = "GAD-7",
+                        y_title     = y_var_name,
+                        main_title  = paste0("Association between GAD and ", y_var_name))
+  print(fig)
+
+}
+```
+
+Most plots seem to indicate that there is no linear relationship between the
+variables. This will be further examined with correlation analyses.
+
+#### 3.2.1.2 Correlation Analysis
+
+Next, the relationship between the variables that demonstrated a linear
+relationship is examined separately for the pre- and post-results. If both
+variables have a relatively normal distribution according to the normality test,
+the Pearson correlation method is used. If one or both variables had a
+non-normal (e.g. skewed) distribution, the Spearman correlation will be used
+instead. The null hypothesis for both tests is that there is no correlation.
+
+```{r message=FALSE, warning=FALSE}
+# The warnings about not being able to compute an exact p-value with the Spearman method is suppressed
+
+# Analysis for pre-measurements for the control group using
+numerical_variable_columns_index <- c(6, 7, 8)
+
+corr_results_pre_control <- get_corr_results_pre_control(data_pre_control,
+                                                         numerical_variable_columns_index)
+# Correlation analysis results for pre-control data
+corr_results_pre_control
+```
+
+```{r message=FALSE, warning=FALSE}
+# The warnings about not being able to compute an exact p-value with the Spearman method is suppressed
+
+corr_results_pre_treatment <- get_corr_results_pre_treatment(data_pre_treatment,
+                                                         numerical_variable_columns_index)
+# Correlation analysis results for pre-treatment data
+corr_results_pre_treatment
+
+```
+
+Based on the results, the only correlation that is significant (α = 0.05) is the
+correlation between PHQ-9 and GAD-7 in the control group.
+
+Next, the post-measurements are analysed by performing the correlation analysis
+separately for each group.
+
+```{r message=FALSE, warning=FALSE}
+# The warnings about not being able to compute an exact p-value with the Spearman method is suppressed
+
+corr_results_post_control <- get_corr_results_post_control(data_post_control,
+                                                           numerical_variable_columns_index)
+
+# Correlation analysis results for post-control data
+corr_results_post_control
+
+```
+
+```{r message=FALSE, warning=FALSE}
+# The warnings about not being able to compute an exact p-value with the Spearman method is suppressed
+
+corr_results_post_treatment <- 
+  get_corr_results_post_treatment(data_post_treatment,
+                                  numerical_variable_columns_index)
+
+# Correlation analysis results for post-treatment data
+corr_results_post_treatment
+```
+
+Based on the results, we cannot reject the null hypothesis that the correlation
+between any of the variables is 0.
+
+### 3.2.2 Categorical Variables
+
+The association between categorical variables is examined by bar charts,
+analysing contingency tables and using chi-square test of independence.
+
+#### 3.2.2.1 Bar chart
+
+```{r}
+
+get_barchart_grouped_grid_ggplot(data        = data,
+                                 x           = data$Gender,
+                                 x_labels    = c("Male", "Female"),
+                                 group_var   = data$Treatment,
+                                 main_title  = paste0("Barchart of the Number of Respondents by Gender"),
+                                 x_title     = "Gender")
+```
+
+It can be seen that the ratio between females and males is quite equal in the
+control group (both in pre and post measurements), whereas there are noticeably
+less males than females in the treatment group. The same information can be
+observed from the contingency tables.
+
+#### 3.2.2.2 Contingency tables
+
+```{r}
+# Creates a contingency table by using a formula
+contingency_table <- xtabs(~ Time + Treatment + Gender, data)
+
+# Adds the total margins to the contingency table
+ftable(addmargins(contingency_table, margin = 2:3, list(Total = sum)))
+```
+
+```{r}
+# Creates a contingency table by using a formula
+contingency_table <- xtabs(~ Treatment + Gender, data)
+
+# Adds the total margins to the contingency table
+ftable(addmargins(contingency_table, margin = 1:2, list(Total = sum)))
+```
+
+```{r}
+# Creates a contingency table by using a formula
+contingency_table <- xtabs(~ Time + Gender, data)
+
+# Adds the total margins to the contingency table
+ftable(addmargins(contingency_table, margin = 1:2, list(Total = sum)))
+```
+
+```{r}
+# Creates a contingency table by using a formula
+contingency_table <- xtabs(~ Time + Treatment, data)
+
+# Adds the total margins to the contingency table
+ftable(addmargins(contingency_table, margin = 1:2, list(Total = sum)))
+```
+
+#### 3.2.2.3 Chi-square test of independence
+
+The chi-square test of independence is done to analyse if the categorical
+variables are independent or not. The null hypothesis is that the variables are
+independent.
+
+```{r}
+# Chi-square test of Independence between variables Gender and Treatment
+chisq.test(data$Gender, data$Treatment)
+```
+
+```{r}
+# Chi-square test of Independence between variables Gender and Time
+chisq.test(data$Gender, data$Time)
+```
+
+```{r}
+# Chi-square test of Independence between variables Treatment and Time
+chisq.test(data$Treatment, data$Time)
+```
+
+The results indicate that all three variables are independent of each other.
+
+### 3.2.3 Numerical and Categorical Variables
+
+The relationship between the categorical and numerical variables (the impact of
+gender on all the target variables) is visualised by box plots. Further tests
+are not yet performed as they are the main focus of the statistical analysis.
+
+```{r message=FALSE, warning=FALSE}
+# Warnings about the missing data are suppressed
+
+numerical_variable_columns_index <- c(2, 6, 7, 8)
+
+for (i in numerical_variable_columns_index){
+  x           <- data[, i]
+  x_var_name  <- names(data)[i]
+  
+
+  fig <- get_boxplot_grouped_grid(
+                        data          = data,
+                        x             = x,
+                        y             = data$Gender,
+                        y_levels      = c("Male", "Female"),
+                        group_var     = data$Gender,
+                        legend_title  = "Gender",
+                        legend_labels = c("Male", "Female"),
+                        x_title       = x_var_name)
+  print(fig)
+
+}
+
+```
+
+We can observe that the largest differences in the distributions occur with
+*PHQ-9* between males and females, espcially in the control group.
+
+```{r message=FALSE, warning=FALSE}
+# Warnings about the missing data are suppressed
+
+numerical_variable_columns_index <- c(2, 6, 7, 8)
+
+for (i in numerical_variable_columns_index){
+  x           <- data[, i]
+  x_var_name  <- names(data)[i]
+  
+
+  fig <- get_boxplot_grouped_grid(
+                        data           = data,
+                        y              = data$Treatment,
+                        y_levels       = c("Treatment", "Control"),
+                        x              = x,
+                        group_var      = data$Treatment,
+                        legend_title   = "Treatment",
+                        legend_labels  = c("Control", "Treatment"),
+                        x_title        = x_var_name,
+                        grid_time_only = TRUE)
+  print(fig)
+
+}
+```
+
+

@@ -78,7 +78,7 @@ get_complete_sim_data <- function(n){
   ### 3. Simulating the post-treatment measurements ###
   # NOTE! The mean and SD are based on the changes between the baseline and 
   # post-measurements. The limits for the truncated distributions have been
-  # chosen arbitrary to ensure results to not produce impossible result
+  # chosen arbitrarily to ensure we do not simulate impossible values
   
   
   # ISI total score
@@ -171,7 +171,8 @@ get_complete_sim_data <- function(n){
                             "PHQ-9", "GAD-7")
 
 
-  # Function that replaces smaller than a with a and values larger than b with b
+  # Function that replaces values smaller than a with a and values larger than 
+  # b with b
   set_ranges <- function(values, a, b){
     left_clipped <- ifelse(values < a, a, values)
     right_clipped <- ifelse(left_clipped > b, b, left_clipped)
@@ -186,7 +187,7 @@ get_complete_sim_data <- function(n){
                        "GAD-7"=c(0, 21))
   
   # The values are set within allowed ranges for each variable and added to 
-  # the data frame"
+  # the data frame
   complete_data$ISI <- round(set_ranges(values=complete_data$ISI, 
                                         a=y_range_list$ISI[1], 
                                         b=y_range_list$ISI[2]))
@@ -227,7 +228,7 @@ get_data_with_missingness <- function(data){
   data_with_dropouts <- rbind(data_pre, data_post_with_dropouts)
 
   # Add missingness (MAR) to three variables in the data (columns 7:9) with
-  # 30% probability
+  # 32% probability
   data_missing_values <- ampute(data_with_dropouts[, 7:8], 
                                 prop = 0.32, 
                                 mech = "MAR")
